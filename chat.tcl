@@ -11,7 +11,9 @@ $cc include <sys/socket.h>
 $cc include <netdb.h>
 $cc include <unistd.h>
 
-$cc proc serve {} int {
+namespace eval tickle {}
+
+$cc proc tickle::listen {} int {
     struct addrinfo hints;
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET;      // ipv4
@@ -29,7 +31,7 @@ $cc proc serve {} int {
     return sockfd;
 }
 
-$cc proc receive {int sockfd} Tcl_Obj* {
+$cc proc tickle::receive {int sockfd} Tcl_Obj* {
     // prepare message from client
     int len = 1024;
     char msg[len];
@@ -48,6 +50,24 @@ $cc proc receive {int sockfd} Tcl_Obj* {
     return result;
 }
 
+$cc proc tickle::talk {char* msg} void {
+    // connect to localhost:3490
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET;      // ipv4
+    hints.ai_socktype = SOCK_DGRAM; // tcp
+
+    struct addrinfo *res;
+    getaddrinfo("localhost", "3490", &hints, &res);
+    int sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+
+    // send message
+    sendto(sockfd, msg, strlen(msg), 0, res->ai_addr, res->ai_addrlen);
+
+    freeaddrinfo(res);
+    close(sockfd);
+}
+
 $cc compile
 
 if {![info exists ::inChildThread]} {
@@ -57,10 +77,11 @@ if {![info exists ::inChildThread]} {
     wm title . "Tickle"
 
     grid [tk::text .text -width 40 -height 10]
-    .text insert 1.0 "hello darling"
 
-    grid [tk::text .input -width 40 -height 1]
-    .input insert 1.0 "input"
+    grid [tk::entry .input -textvariable msg]
+    bind .input <Return> {
+        tickle::talk $msg
+    }
 
     # Listen to socket connections
     package require Thread
@@ -72,13 +93,16 @@ if {![info exists ::inChildThread]} {
         set ::inChildThread true
         source chat.tcl
 
-        set fd [serve]
+        set fd [tickle::listen]
 
         while {1} {
             puts "waiting"
-            set msg [receive $fd]
+            set msg [tickle::receive $fd]
             puts $msg
-            thread::send -async $::mainTid ".text insert 1.0 $msg"
+            thread::send -async $::mainTid {
+                .text insert end "$msg\n"
+                set msg ""
+            }
         }
     }
 
