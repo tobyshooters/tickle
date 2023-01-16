@@ -1,3 +1,7 @@
+# author: Omar Rizwan
+# repo:   github.com/FolkComputer/folk
+# commit: 8e702d62b11de011507864845546a2ada4cc5c7c
+
 namespace eval c {
     variable nextHandle 0
     proc create {} {
