@@ -26,45 +26,49 @@ $cc proc tickle::listen {} int {
     int sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     bind(sockfd, res->ai_addr, res->ai_addrlen);
 
+    char ip[INET_ADDRSTRLEN];
+    struct in_addr addr = ((struct sockaddr_in*) &res)->sin_addr;
+    inet_ntop(AF_INET, &addr, ip, sizeof ip);
+    printf("Listening @ %s\n", ip);
+
     freeaddrinfo(res);
 
     return sockfd;
 }
 
 $cc proc tickle::receive {int sockfd} Tcl_Obj* {
-    // prepare message from client
     int len = 1024;
     char msg[len];
+    memset(msg, 0, sizeof msg);
+
     struct sockaddr client;
     socklen_t size = sizeof client;
+    recvfrom(sockfd, msg, len-1, 0, &client, &size);
+    msg[len] = '\0';
 
-    // get client's message
-    recvfrom(sockfd, msg, len, 0, &client, &size);
-
-    // get client's ip
-    char ip[INET_ADDRSTRLEN];
-    struct in_addr addr = ((struct sockaddr_in*) &client)->sin_addr;
-    inet_ntop(AF_INET, &addr, ip, sizeof ip);
-
-    Tcl_Obj* result = Tcl_ObjPrintf("listener heard %s from %s\n", msg, ip);
+    Tcl_Obj* result = Tcl_ObjPrintf("%s", msg);
     return result;
 }
 
 $cc proc tickle::talk {char* msg} void {
-    // connect to localhost:3490
-    struct addrinfo hints;
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET;      // ipv4
-    hints.ai_socktype = SOCK_DGRAM; // tcp
+    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 
-    struct addrinfo *res;
-    getaddrinfo("localhost", "3490", &hints, &res);
-    int sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    int broadcast = 1;
+    setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof broadcast);
+
+    // broadcast address: can't use getaddrinfo...
+    struct hostent *he = gethostbyname("192.168.1.255");
+
+    struct sockaddr_in server;
+    server.sin_family = AF_INET;
+    server.sin_port = htons(3490);
+    server.sin_addr = *((struct in_addr*) he->h_addr);
+    memset(server.sin_zero, '\0', sizeof server.sin_zero);
 
     // send message
-    sendto(sockfd, msg, strlen(msg), 0, res->ai_addr, res->ai_addrlen);
+    printf("Broadcast %s\n", msg);
+    sendto(sockfd, msg, strlen(msg), 0, (struct sockaddr *) &server, sizeof server);
 
-    freeaddrinfo(res);
     close(sockfd);
 }
 
@@ -81,6 +85,7 @@ if {![info exists ::inChildThread]} {
     grid [tk::entry .input -textvariable msg]
     bind .input <Return> {
         tickle::talk $msg
+        set msg ""
     }
 
     # Listen to socket connections
@@ -96,13 +101,10 @@ if {![info exists ::inChildThread]} {
         set fd [tickle::listen]
 
         while {1} {
-            puts "waiting"
+            puts "Waiting for message"
             set msg [tickle::receive $fd]
-            puts $msg
-            thread::send -async $::mainTid {
-                .text insert end "$msg\n"
-                set msg ""
-            }
+            puts "Heard $msg"
+            thread::send -async $::mainTid [list .text insert end "$msg\n"]
         }
     }
 
