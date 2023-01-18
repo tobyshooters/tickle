@@ -99,4 +99,3 @@ if {![info exists ::inthread]} {
 
     vwait forever
 }
-
