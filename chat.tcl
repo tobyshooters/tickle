@@ -46,7 +46,11 @@ $cc proc tickle::receive {int sockfd} Tcl_Obj* {
     recvfrom(sockfd, msg, len-1, 0, &client, &size);
     msg[len] = '\0';
 
-    Tcl_Obj* result = Tcl_ObjPrintf("%s", msg);
+    char ip[INET_ADDRSTRLEN];
+    struct sockaddr_in *sa = (struct sockaddr_in *) &client;
+    inet_ntop(AF_INET, &(sa->sin_addr), ip, sizeof ip);
+
+    Tcl_Obj* result = Tcl_ObjPrintf("[%s] %s", ip, msg);
     return result;
 }
 
@@ -65,9 +69,15 @@ $cc proc tickle::talk {char* msg} void {
     server.sin_addr = *((struct in_addr*) he->h_addr);
     memset(server.sin_zero, '\0', sizeof server.sin_zero);
 
-    // send message
-    printf("Broadcast %s\n", msg);
-    sendto(sockfd, msg, strlen(msg), 0, (struct sockaddr *) &server, sizeof server);
+    // get own hostname to send with message
+    char host[256];
+    gethostname(host, sizeof(host));
+
+    // combine host with message before sending
+    char packet[1024];
+    sprintf(packet, "%s: %s", host, msg);
+
+    sendto(sockfd, packet, strlen(packet), 0, (struct sockaddr *) &server, sizeof server);
 
     close(sockfd);
 }
@@ -80,7 +90,7 @@ if {![info exists ::inChildThread]} {
     package require Tk
     wm title . "Tickle"
 
-    grid [tk::text .text -width 40 -height 10]
+    grid [tk::text .text -width 80 -height 10]
 
     grid [tk::entry .input -textvariable msg]
     bind .input <Return> {
