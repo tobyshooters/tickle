@@ -3,15 +3,15 @@ broadcast messages to everyone on your network
 
 <img width="607" alt="Screen Shot 2023-01-25 at 7 18 44 PM" src="https://user-images.githubusercontent.com/48459292/214724541-df833902-b1d0-4b0b-ae25-babc543c914b.png">
 
-a [scripting](https://www.tcl.tk/doc/scripting.html) proof of concept<br>
-hard to find a simpler (threaded, networked, GUI, single-dependency) program
+a simple {networked, threaded, native GUI, single-dependency} program<br>
+a proof of concept in [computational bricolage](https://www.tcl.tk/doc/scripting.html)
 
 ### run
 ```
 $ tclsh chat.tcl
 ```
 
-### dependencies
+### install
 ```
 macOS
 $ brew install tcl-tk 
