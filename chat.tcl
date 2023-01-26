@@ -67,11 +67,11 @@ $cc proc tickle::talk {char* msg} void {
     // get own hostname to send with message
     char host[256];
     gethostname(host, sizeof(host));
+    host[strlen(host)] = ':';
 
     // combine host with message before sending
     char packet[1024];
-    sprintf(packet, "%s:", host);
-    sprintf(packet, "%-20s %s", packet, msg);
+    sprintf(packet, "%-20s %s", host, msg);
 
     sendto(sockfd, packet, strlen(packet), 0, (struct sockaddr *) &server, sizeof server);
 
