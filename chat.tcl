@@ -26,11 +26,6 @@ $cc proc tickle::listen {} int {
     int sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     bind(sockfd, res->ai_addr, res->ai_addrlen);
 
-    char ip[INET_ADDRSTRLEN];
-    struct in_addr addr = ((struct sockaddr_in*) &res)->sin_addr;
-    inet_ntop(AF_INET, &addr, ip, sizeof ip);
-    printf("Listening @ %s\n", ip);
-
     freeaddrinfo(res);
 
     return sockfd;
@@ -75,7 +70,8 @@ $cc proc tickle::talk {char* msg} void {
 
     // combine host with message before sending
     char packet[1024];
-    sprintf(packet, "%s: %s", host, msg);
+    sprintf(packet, "%s:", host);
+    sprintf(packet, "%-20s %s", packet, msg);
 
     sendto(sockfd, packet, strlen(packet), 0, (struct sockaddr *) &server, sizeof server);
 
@@ -89,10 +85,18 @@ if {![info exists ::inChildThread]} {
     # Define the chat window
     package require Tk
     wm title . "Tickle"
+    wm geometry . 480x240
+    grid columnconfigure . 0 -weight 1
+    grid rowconfigure . 0 -weight 1
 
-    grid [tk::text .text -width 80 -height 10]
+    tk::text .text -highlightthickness 0 -padx 11 -pady 11 -yscrollcommand {.ys set}
+    grid .text -column 0 -row 0 -sticky nswe
 
-    grid [tk::entry .input -textvariable msg]
+    tk::scrollbar .ys -orient vertical -command {.text yview}
+    grid .ys -column 1 -row 0 -sticky ns
+
+    tk::entry .input -textvariable msg
+    grid .input -padx 11 -column 0 -row 1 -sticky ew
     bind .input <Return> {
         tickle::talk $msg
         set msg ""
@@ -115,6 +119,7 @@ if {![info exists ::inChildThread]} {
             set msg [tickle::receive $fd]
             puts "Heard $msg"
             thread::send -async $::mainTid [list .text insert end "$msg\n"]
+            thread::send -async $::mainTid [list .text see end]
         }
     }
 
