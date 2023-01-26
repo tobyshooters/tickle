@@ -84,7 +84,7 @@ if {![info exists ::inChildThread]} {
 
     # Define the chat window
     package require Tk
-    wm title . "Tickle"
+    wm title . "tickle"
     wm geometry . 480x240
     grid columnconfigure . 0 -weight 1
     grid rowconfigure . 0 -weight 1
