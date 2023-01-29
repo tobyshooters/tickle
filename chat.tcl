@@ -73,16 +73,32 @@ $cc proc tickle::talk {char* msg} void {
     char host[256];
     gethostname(host, sizeof(host));
 
-    // store data in tcl dictionary format
-    char packet[1024];
+    // timestamp when message is sent
     unsigned ts = (unsigned) time(NULL);
-    sprintf(packet, ".host %s .msg %s .ts %u", host, msg, ts);
+
+    // "structured data" as tcl dictionary
+    char packet[1024];
+    sprintf(packet, ".host %s .msg \"%s\" .ts %u", host, msg, ts);
 
     sendto(sockfd, packet, strlen(packet), 0, (struct sockaddr *) &server, sizeof server);
     close(sockfd);
 }
 
 $cc compile
+
+proc handle_payload {payload} {
+    set host [dict get $payload .host]
+    set ip   [dict get $payload .ip]
+    set msg  [dict get $payload .msg]
+    set ts   [dict get $payload .ts]
+
+    set dt [clock format $ts -format "%D %r"]
+    set src [format %-30s "$host @ $ip:"]
+
+    thread::send -async $::mainTid [list .text insert end "$dt\n" meta]
+    thread::send -async $::mainTid [list .text insert end "$src $msg\n\n"]
+    thread::send -async $::mainTid [list .text see end]
+}
 
 if {![info exists ::inChildThread]} {
 
@@ -117,24 +133,29 @@ if {![info exists ::inChildThread]} {
         set ::inChildThread true
         source chat.tcl
 
+        # Read in history
+        set hist [open "history.txt" r]
+        set data [split [read $hist] "\n"]
+        foreach payload $data {
+            if {$payload ne {}} {
+                puts $payload
+                handle_payload $payload
+            }
+        }
+        close $hist
+
+        # Listen for future messages
         set fd [tickle::listen]
 
         while {1} {
-            puts "Waiting for message"
             set payload [tickle::receive $fd]
-            puts "Heard $payload"
+            puts $payload
 
-            set host [dict get $payload .host]
-            set ip   [dict get $payload .ip]
-            set msg  [dict get $payload .msg]
-            set ts   [dict get $payload .ts]
+            set hist [open "history.txt" a]
+            puts $hist $payload
+            close $hist
 
-            set dt [clock format $ts -format "%D %r"]
-            set src [format %-30s "$host @ $ip:"]
-
-            thread::send -async $::mainTid [list .text insert end "$dt\n" meta]
-            thread::send -async $::mainTid [list .text insert end "$src $msg\n\n"]
-            thread::send -async $::mainTid [list .text see end]
+            handle_payload $payload
         }
     }
 
