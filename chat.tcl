@@ -54,7 +54,7 @@ $cc proc tickle::receive {int sockfd} Tcl_Obj* {
     return result;
 }
 
-$cc proc tickle::talk {char* msg} void {
+$cc proc tickle::talk {char* msg int palilalia} void {
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 
     int broadcast = 1;
@@ -69,16 +69,18 @@ $cc proc tickle::talk {char* msg} void {
     server.sin_addr = *((struct in_addr*) he->h_addr);
     memset(server.sin_zero, '\0', sizeof server.sin_zero);
 
-    // get own hostname to send with message
-    char host[256];
-    gethostname(host, sizeof(host));
-
-    // timestamp when message is sent
-    unsigned ts = (unsigned) time(NULL);
-
-    // "structured data" as tcl dictionary
     char packet[1024];
-    sprintf(packet, ".host %s .msg \"%s\" .ts %u", host, msg, ts);
+
+    if (palilalia) {
+        // msg variable is pre-structured, e.g from history
+        strcpy(packet, msg);
+    } else {
+        // "structured data" as tcl dictionary
+        char host[256];
+        gethostname(host, sizeof(host));     // get own hostname to send with message
+        unsigned ts = (unsigned) time(NULL); // timestamp when message is sent
+        sprintf(packet, ".host %s .msg \"%s\" .ts %u", host, msg, ts);
+    }
 
     sendto(sockfd, packet, strlen(packet), 0, (struct sockaddr *) &server, sizeof server);
     close(sockfd);
@@ -119,7 +121,7 @@ if {![info exists ::inChildThread]} {
     tk::entry .input -textvariable msg
     grid .input -padx 11 -column 0 -row 1 -sticky ew
     bind .input <Return> {
-        tickle::talk $msg
+        tickle::talk $msg 0
         set msg ""
     }
 
