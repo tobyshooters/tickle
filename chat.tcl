@@ -10,6 +10,7 @@ $cc include <sys/types.h>
 $cc include <sys/socket.h>
 $cc include <netdb.h>
 $cc include <unistd.h>
+$cc include <time.h>
 
 namespace eval tickle {}
 
@@ -74,7 +75,8 @@ $cc proc tickle::talk {char* msg} void {
 
     // store data in tcl dictionary format
     char packet[1024];
-    sprintf(packet, ".host %s .msg %s", host, msg);
+    unsigned ts = (unsigned) time(NULL);
+    sprintf(packet, ".host %s .msg %s .ts %u", host, msg, ts);
 
     sendto(sockfd, packet, strlen(packet), 0, (struct sockaddr *) &server, sizeof server);
     close(sockfd);
@@ -92,6 +94,7 @@ if {![info exists ::inChildThread]} {
     grid rowconfigure . 0 -weight 1
 
     tk::text .text -highlightthickness 0 -padx 11 -pady 11 -yscrollcommand {.ys set}
+    .text tag configure meta -font {Courier 12 italic}
     grid .text -column 0 -row 0 -sticky nswe
 
     tk::scrollbar .ys -orient vertical -command {.text yview}
@@ -122,12 +125,15 @@ if {![info exists ::inChildThread]} {
             puts "Heard $payload"
 
             set host [dict get $payload .host]
-            set ip [dict get $payload .ip]
-            set msg [dict get $payload .msg]
-            set src "\[$host @ $ip\]"
-            set ui "[format %-30s $src] $msg"
+            set ip   [dict get $payload .ip]
+            set msg  [dict get $payload .msg]
+            set ts   [dict get $payload .ts]
 
-            thread::send -async $::mainTid [list .text insert end "$ui\n"]
+            set dt [clock format $ts -format "%D %r"]
+            set src [format %-30s "$host @ $ip:"]
+
+            thread::send -async $::mainTid [list .text insert end "$dt\n" meta]
+            thread::send -async $::mainTid [list .text insert end "$src $msg\n\n"]
             thread::send -async $::mainTid [list .text see end]
         }
     }
