@@ -48,7 +48,7 @@ $cc proc tickle::receive {int sockfd} Tcl_Obj* {
 
     // append ip to dict
     char packet[1024];
-    sprintf(packet, "%s .ip %s",msg, ip);
+    sprintf(packet, "%s ip %s",msg, ip);
 
     Tcl_Obj* result = Tcl_ObjPrintf("%s", packet);
     return result;
@@ -79,7 +79,7 @@ $cc proc tickle::talk {char* msg int palilalia} void {
         char host[256];
         gethostname(host, sizeof(host));     // get own hostname to send with message
         unsigned ts = (unsigned) time(NULL); // timestamp when message is sent
-        sprintf(packet, ".host %s .msg \"%s\" .ts %u", host, msg, ts);
+        sprintf(packet, "host %s msg \"%s\" ts %u", host, msg, ts);
     }
 
     sendto(sockfd, packet, strlen(packet), 0, (struct sockaddr *) &server, sizeof server);
@@ -89,17 +89,14 @@ $cc proc tickle::talk {char* msg int palilalia} void {
 $cc compile
 
 proc handle_payload {payload} {
-    set host [dict get $payload .host]
-    set ip   [dict get $payload .ip]
-    set msg  [dict get $payload .msg]
-    set ts   [dict get $payload .ts]
+    dict with payload {
+        set dt [clock format $ts -format "%D %r"]
+        set src [format %-30s "$host @ $ip:"]
 
-    set dt [clock format $ts -format "%D %r"]
-    set src [format %-30s "$host @ $ip:"]
-
-    thread::send -async $::mainTid [list .text insert end "$dt\n" meta]
-    thread::send -async $::mainTid [list .text insert end "$src $msg\n\n"]
-    thread::send -async $::mainTid [list .text see end]
+        thread::send -async $::mainTid [list .text insert end "$dt\n" meta]
+        thread::send -async $::mainTid [list .text insert end "$src $msg\n\n"]
+        thread::send -async $::mainTid [list .text see end]
+    }
 }
 
 if {![info exists ::inChildThread]} {
