@@ -45,7 +45,11 @@ $cc proc tickle::receive {int sockfd} Tcl_Obj* {
     struct sockaddr_in *sa = (struct sockaddr_in *) &client;
     inet_ntop(AF_INET, &(sa->sin_addr), ip, sizeof ip);
 
-    Tcl_Obj* result = Tcl_ObjPrintf("[%s] %s", ip, msg);
+    // append ip to dict
+    char packet[1024];
+    sprintf(packet, "%s .ip %s",msg, ip);
+
+    Tcl_Obj* result = Tcl_ObjPrintf("%s", packet);
     return result;
 }
 
@@ -67,14 +71,12 @@ $cc proc tickle::talk {char* msg} void {
     // get own hostname to send with message
     char host[256];
     gethostname(host, sizeof(host));
-    host[strlen(host)] = ':';
 
-    // combine host with message before sending
+    // store data in tcl dictionary format
     char packet[1024];
-    sprintf(packet, "%-20s %s", host, msg);
+    sprintf(packet, ".host %s .msg %s", host, msg);
 
     sendto(sockfd, packet, strlen(packet), 0, (struct sockaddr *) &server, sizeof server);
-
     close(sockfd);
 }
 
@@ -116,9 +118,16 @@ if {![info exists ::inChildThread]} {
 
         while {1} {
             puts "Waiting for message"
-            set msg [tickle::receive $fd]
-            puts "Heard $msg"
-            thread::send -async $::mainTid [list .text insert end "$msg\n"]
+            set payload [tickle::receive $fd]
+            puts "Heard $payload"
+
+            set host [dict get $payload .host]
+            set ip [dict get $payload .ip]
+            set msg [dict get $payload .msg]
+            set src "\[$host @ $ip\]"
+            set ui "[format %-30s $src] $msg"
+
+            thread::send -async $::mainTid [list .text insert end "$ui\n"]
             thread::send -async $::mainTid [list .text see end]
         }
     }
