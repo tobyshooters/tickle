@@ -88,14 +88,52 @@ $cc proc tickle::talk {char* msg int palilalia} void {
 
 $cc compile
 
-proc handle_payload {payload} {
-    dict with payload {
-        set dt [clock format $ts -format "%D %r"]
-        set src [format %-30s "$host @ $ip:"]
+namespace eval db {
+    variable entries [dict create]
 
-        thread::send -async $::mainTid [list .text insert end "$dt\n" meta]
-        thread::send -async $::mainTid [list .text insert end "$src $msg\n\n"]
-        thread::send -async $::mainTid [list .text see end]
+    proc load {} {
+        set hist [open "history.txt" r]
+        set data [split [read $hist] "\n"]
+        close $hist
+
+        foreach entry $data {
+            db::handle $entry 0
+        }
+    }
+
+    proc handle {entry add_to_history} {
+        if {$entry eq {}} { return }
+
+        dict with entry {
+            set id "$ts-$ip"
+            if {[dict exists $db::entries $id]} {
+                puts "dupd $id"
+                return
+            }
+
+            puts "recv $id"
+            dict append db::entries $id $entry
+
+            set dt [clock format $ts -format "%D %r"]
+            set src [format %-30s "$host @ $ip:"]
+
+            .text insert end "\n$dt\n" meta
+            .text insert end "$src $msg\n"
+            .text see end
+
+            if {$add_to_history} {
+                set hist [open "history.txt" a]
+                puts $hist $entry
+                close $hist
+            }
+        }
+    }
+
+    proc broadcast {} {
+        puts $db::entries
+        dict for {id entry} $db::entries {
+            tickle::talk $entry 1
+        }
     }
 }
 
@@ -108,19 +146,31 @@ if {![info exists ::inChildThread]} {
     grid columnconfigure . 0 -weight 1
     grid rowconfigure . 0 -weight 1
 
-    tk::text .text -highlightthickness 0 -padx 11 -pady 11 -yscrollcommand {.ys set}
+    tk::text .text -highlightthickness 0 -padx 11 -yscrollcommand {.ys set}
     .text tag configure meta -font {Courier 12 italic}
-    grid .text -column 0 -row 0 -sticky nswe
+    grid .text -column 0 -columnspan 3 -row 0 -sticky nswe
 
     tk::scrollbar .ys -orient vertical -command {.text yview}
-    grid .ys -column 1 -row 0 -sticky ns
+    grid .ys -column 3 -row 0 -sticky ns
 
     tk::entry .input -textvariable msg
-    grid .input -padx 11 -column 0 -row 1 -sticky ew
     bind .input <Return> {
         tickle::talk $msg 0
         set msg ""
     }
+    grid .input -padx 11 -column 0 -row 1 -sticky ew
+
+    tk::button .send -text send -command {
+        tickle::talk $msg 0
+        set msg ""
+    }
+    grid .send -column 1 -row 1
+
+    tk::button .broadcast -text echo -command db::broadcast
+    grid .broadcast -column 2 -row 1
+
+    # Read in history
+    db::load
 
     # Listen to socket connections
     package require Thread
@@ -132,29 +182,12 @@ if {![info exists ::inChildThread]} {
         set ::inChildThread true
         source chat.tcl
 
-        # Read in history
-        set hist [open "history.txt" r]
-        set data [split [read $hist] "\n"]
-        foreach payload $data {
-            if {$payload ne {}} {
-                puts $payload
-                handle_payload $payload
-            }
-        }
-        close $hist
-
         # Listen for future messages
         set fd [tickle::listen]
 
         while {1} {
-            set payload [tickle::receive $fd]
-            puts $payload
-
-            set hist [open "history.txt" a]
-            puts $hist $payload
-            close $hist
-
-            handle_payload $payload
+            set entry [tickle::receive $fd]
+            thread::send -async $::mainTid [list db::handle $entry 1]
         }
     }
 
