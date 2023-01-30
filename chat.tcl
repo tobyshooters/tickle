@@ -110,7 +110,8 @@ namespace eval db {
         if {$entry eq {}} { return }
 
         dict with entry {
-            set id "$ts-$ip"
+            set id "$ts-$msg"
+
             if {[dict exists $db::entries $id]} {
                 puts "dupd $id"
                 return
@@ -166,7 +167,6 @@ if {![info exists ::inChildThread]} {
 
     tk::button .broadcast -text echo -command {
         dict for {id entry} $db::entries {
-            puts "sending $entry"
             tickle::talk $entry 1
         }
     }
