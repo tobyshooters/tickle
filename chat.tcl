@@ -92,7 +92,12 @@ namespace eval db {
     variable entries [dict create]
 
     proc load {} {
-        set hist [open "history.txt" r]
+        if {![file exists history.txt]} {
+            set hist [open history.txt w+]
+            close $hist
+        }
+
+        set hist [open history.txt r]
         set data [split [read $hist] "\n"]
         close $hist
 
@@ -115,24 +120,17 @@ namespace eval db {
             dict append db::entries $id $entry
 
             set dt [clock format $ts -format "%D %r"]
-            set src [format %-30s "$host @ $ip:"]
+            set src [format %-35s "$host @ $ip:"]
 
             .text insert end "\n$dt\n" meta
             .text insert end "$src $msg\n"
             .text see end
 
             if {$add_to_history} {
-                set hist [open "history.txt" a]
+                set hist [open history.txt a]
                 puts $hist $entry
                 close $hist
             }
-        }
-    }
-
-    proc broadcast {} {
-        puts $db::entries
-        dict for {id entry} $db::entries {
-            tickle::talk $entry 1
         }
     }
 }
@@ -166,7 +164,12 @@ if {![info exists ::inChildThread]} {
     }
     grid .send -column 1 -row 1
 
-    tk::button .broadcast -text echo -command db::broadcast
+    tk::button .broadcast -text echo -command {
+        dict for {id entry} $db::entries {
+            puts "sending $entry"
+            tickle::talk $entry 1
+        }
+    }
     grid .broadcast -column 2 -row 1
 
     # Read in history
